@@ -1,0 +1,14 @@
+{
+  "name": "jonesboro-tornado-probability",
+  "version": "1.0.0",
+  "description": "Real-time tornado probability app for Jonesboro, AR",
+  "private": true,
+  "scripts": {
+    "start": "npm run start --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "install:all": "npm install --prefix backend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jonesboro Tornado Probability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #080c10;
+      --surface:   #0d1219;
+      --border:    #1a2535;
+      --text:      #c8d4e0;
+      --muted:     #4a5c70;
+      --accent:    #e8f4fd;
+
+      /* Risk colors */
+      --minimal:   #2a7a4b;
+      --marginal:  #4a8f3f;
+      --elevated:  #d4a017;
+      --high:      #d45f17;
+      --extreme:   #c42b2b;
+
+      --current-risk: var(--minimal);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Atmospheric background ── */
+    .atmo-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, #0d1e2e 0%, transparent 70%),
+                  radial-gradient(ellipse 50% 40% at 80% 100%, #0a1a10 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .atmo-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .layout {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto;
+      gap: 16px;
+    }
+
+    /* ── Header ── */
+    .header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(32px, 5vw, 56px);
+      letter-spacing: 0.04em;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .header-left .subtitle {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2a7a4b;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .status-dot.loading { background: #d4a017; animation: none; }
+    .status-dot.error   { background: #c42b2b; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Risk Score Card ── */
+    .risk-card {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 32px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.5s;
+    }
+
+    .risk-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 100% at 0% 50%, color-mix(in srgb, var(--current-risk) 8%, transparent), transparent 70%);
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+
+    .risk-score-wrap {
+      position: relative;
+    }
+
+    .risk-score-ring {
+      width: 140px;
+      height: 140px;
+    }
+
+    .ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+    .ring-fill {
+      fill: none;
+      stroke: var(--current-risk);
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 376;
+      stroke-dashoffset: 376;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s;
+    }
+
+    .risk-score-number {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .score-value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 52px;
+      line-height: 1;
+      color: var(--accent);
+      transition: color 0.5s;
+    }
+
+    .score-unit {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .risk-label-wrap {
+      flex: 1;
+    }
+
+    .risk-label {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 48px;
+      letter-spacing: 0.05em;
+      color: var(--current-risk);
+      line-height: 1;
+      transition: color 0.5s;
+    }
+
+    .risk-location {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .risk-updated {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    .risk-reasons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 260px;
+    }
+
+    .reason-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text);
+    }
+
+    .reason-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .badge-SPC      { background: #1a2e48; color: #5ba3d0; }
+    .badge-NWS      { background: #2e1a1a; color: #d05b5b; }
+    .badge-HRRR     { background: #1e2a18; color: #7ab85c; }
+    .badge-critical { background: #c42b2b; color: #fff; }
+
+    /* ── Warning banner ── */
+    .warning-banner {
+      grid-column: 1 / -1;
+      background: #c42b2b;
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      animation: flashBanner 1s ease-in-out infinite alternate;
+    }
+
+    .warning-banner.active { display: flex; }
+
+    @keyframes flashBanner {
+      from { opacity: 1; }
+      to   { opacity: 0.85; }
+    }
+
+    .warning-icon { font-size: 24px; flex-shrink: 0; }
+
+    .warning-text { flex: 1; }
+    .warning-text strong { display: block; font-size: 15px; color: #fff; }
+    .warning-text span   { font-size: 12px; color: rgba(255,255,255,0.8); }
+
+    /* ── Section Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    /* ── SPC Section ── */
+    .spc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .spc-day {
+      background: #0a1018;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .spc-day-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .spc-prob {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 40px;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    .spc-prob-unit {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .spc-sig {
+      font-size: 11px;
+      color: #d4a017;
+      margin-top: 6px;
+      display: none;
+    }
+    .spc-sig.active { display: block; }
+
+    .spc-outlook-status {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── Ingredients ── */
+    .ingredient-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .ingredient-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 60px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ing-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .ing-bar-track {
+      background: #0d1219;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .ing-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #2a7a4b, #d4a017);
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .ing-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      text-align: right;
+    }
+
+    .ingredient-source {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    /* ── Alerts ── */
+    .alerts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .alert-item {
+      background: #0a1018;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--muted);
+    }
+
+    .alert-item.warning  { border-left-color: #c42b2b; }
+    .alert-item.watch    { border-left-color: #d4a017; }
+    .alert-item.advisory { border-left-color: #4a8f3f; }
+
+    .alert-event {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .alert-headline {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .alert-expires {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .no-alerts {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* ── Storm reports ── */
+    .reports-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .reports-list::-webkit-scrollbar { width: 4px; }
+    .reports-list::-webkit-scrollbar-track { background: var(--border); border-radius: 2px; }
+    .reports-list::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+    .report-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 8px 10px;
+      background: #0a1018;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .report-type {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: #2e1a1a;
+      color: #d05b5b;
+      white-space: nowrap;
+    }
+
+    .report-desc { color: var(--text); line-height: 1.3; }
+    .report-loc  { font-family: 'DM Mono', monospace; color: var(--muted); text-align: right; font-size: 10px; }
+
+    .no-reports {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    /* ── Refresh button ── */
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .refresh-btn:hover {
+      border-color: var(--text);
+      color: var(--accent);
+    }
+
+    .refresh-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* ── Loading overlay ── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 12, 16, 0.8);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Error message ── */
+    .error-msg {
+      grid-column: 1 / -1;
+      background: #1a0a0a;
+      border: 1px solid #3a1a1a;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #d05b5b;
+      display: none;
+    }
+    .error-msg.active { display: block; }
+
+    /* ── Tabs (Map placeholder) ── */
+    .map-card { grid-column: 1 / -1; }
+
+    .map-placeholder {
+      background: #060a0e;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      height: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .map-placeholder .map-icon { font-size: 32px; opacity: 0.4; }
+    .map-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #5ba3d0;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(91,163,208,0.3);
+      transition: border-color 0.2s;
+    }
+    .map-link:hover { border-color: #5ba3d0; }
+
+    /* ── Footer ── */
+    .footer {
+      grid-column: 1 / -1;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 8px;
+      line-height: 1.6;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      .layout { grid-template-columns: 1fr; }
+      .risk-card { grid-template-columns: auto 1fr; }
+      .risk-reasons { display: none; }
+      .spc-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 420px) {
+      .risk-card { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="atmo-bg"></div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Fetching data…</div>
+</div>
+
+<div class="layout">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <h1>Jonesboro Tornado Probability</h1>
+      <div class="subtitle">Jonesboro, AR · 35.84°N 90.70°W · Real-time assessment</div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="fetchAll()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <!-- Warning Banner -->
+  <div class="warning-banner" id="warningBanner">
+    <div class="warning-icon">🌪</div>
+    <div class="warning-text">
+      <strong id="warningTitle">TORNADO WARNING IN EFFECT</strong>
+      <span id="warningDesc">A tornado warning is currently active for the Jonesboro area.</span>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- Risk Score -->
+  <div class="risk-card" id="riskCard">
+    <div class="risk-score-wrap">
+      <svg class="risk-score-ring" viewBox="0 0 140 140">
+        <circle class="ring-bg" cx="70" cy="70" r="60"/>
+        <circle class="ring-fill" id="ringFill" cx="70" cy="70" r="60"/>
+      </svg>
+      <div class="risk-score-number">
+        <div class="score-value" id="scoreValue">--</div>
+        <div class="score-unit">/100</div>
+      </div>
+    </div>
+
+    <div class="risk-label-wrap">
+      <div class="risk-label" id="riskLabel">LOADING</div>
+      <div class="risk-location">Jonesboro, AR</div>
+      <div class="risk-updated" id="riskUpdated">Last updated: —</div>
+    </div>
+
+    <div class="risk-reasons" id="riskReasons">
+      <div class="reason-item" style="color: var(--muted); font-size:12px;">Loading assessment…</div>
+    </div>
+  </div>
+
+  <!-- SPC Outlooks -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>SPC Tornado Outlook</div>
+    <div class="spc-grid">
+      <div class="spc-day">
+        <div class="spc-day-label">Day 1</div>
+        <div class="spc-prob" id="spcDay1">--<span class="spc-prob-unit">%</span></div>
+        <div class="spc-outlook-status" id="spcDay1Status">Loading…</div>
+        <div class="spc-sig" id="spcDay1Sig">⚠ SIGNIFICANT</div>
+      </div>
+      <div class="spc-day">
+        <div class="spc-day-label">Day 2</div>
+        <div class="spc-prob" id="spcDay2">--<span class="spc-prob-unit">%</span></div>
+        <div class="spc-outlook-status" id="spcDay2Status">Loading…</div>
+        <div class="spc-sig" id="spcDay2Sig">⚠ SIGNIFICANT</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ingredients -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Atmospheric Ingredients</div>
+    <div class="ingredient-grid" id="ingredientGrid">
+      <div style="font-size:12px; color: var(--muted)">Loading…</div>
+    </div>
+    <div class="ingredient-source" id="ingredientSource"></div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Active NWS Alerts</div>
+    <div class="alerts-list" id="alertsList">
+      <div class="no-alerts">Loading alerts…</div>
+    </div>
+  </div>
+
+  <!-- Storm Reports -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Recent Storm Reports (±100 km)</div>
+    <div class="reports-list" id="reportsList">
+      <div class="no-reports">Loading reports…</div>
+    </div>
+  </div>
+
+  <!-- Map Placeholder -->
+  <div class="card map-card">
+    <div class="card-title"><span class="dot"></span>SPC Outlook Map</div>
+    <div class="map-placeholder">
+      <div class="map-icon">🗺</div>
+      <div>Interactive map requires a backend tile layer integration.</div>
+      <a class="map-link" href="https://www.spc.noaa.gov/products/outlook/" target="_blank">
+        View SPC Outlook → spc.noaa.gov
+      </a>
+      <a class="map-link" href="https://radar.weather.gov/station/KNQA/standard" target="_blank" style="margin-top:4px">
+        Memphis NWS Radar → radar.weather.gov
+      </a>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Data sources: NOAA/NWS · Storm Prediction Center · HRRR Model via NWS<br>
+    For official forecasts visit <a href="https://www.weather.gov" target="_blank" style="color:#5ba3d0">weather.gov</a> and <a href="https://www.spc.noaa.gov" target="_blank" style="color:#5ba3d0">spc.noaa.gov</a><br>
+    <span style="opacity:0.5">This tool is for informational purposes only and is not a substitute for official NWS warnings.</span>
+  </footer>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const API_BASE = 'http://localhost:3001';
+const REFRESH_INTERVALS = {
+  alerts: 60_000,
+  spc:    300_000,
+  risk:   120_000,
+};
+
+// ── Risk color map ────────────────────────────────────────────────────────
+const RISK_COLORS = {
+  MINIMAL:  '#2a7a4b',
+  MARGINAL: '#4a8f3f',
+  ELEVATED: '#d4a017',
+  HIGH:     '#d45f17',
+  EXTREME:  '#c42b2b',
+};
+
+// ── State ─────────────────────────────────────────────────────────────────
+let lastData = null;
+let refreshTimer = null;
+
+// ── Fetch all data ────────────────────────────────────────────────────────
+async function fetchAll() {
+  setStatus('loading');
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+
+  try {
+    document.getElementById('loadingOverlay').classList.add('active');
+    const res = await fetch(`${API_BASE}/risk`);
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+    lastData = data;
+
+    renderRisk(data.risk);
+    renderSPC(data.spc);
+    renderHRRR(data.hrrr);
+    renderAlerts(data.nws);
+
+    document.getElementById('errorMsg').classList.remove('active');
+    setStatus('live');
+  } catch (err) {
+    console.error('Fetch error:', err);
+    setStatus('error');
+    showError(`Could not connect to backend at ${API_BASE}. Make sure the server is running.\n\n${err.message}`);
+    // Show simulated data so the UI is still useful for development
+    renderDemoData();
+  } finally {
+    document.getElementById('loadingOverlay').classList.remove('active');
+    btn.disabled = false;
+  }
+
+  // Also fetch reports separately (less critical)
+  try {
+    const rRes = await fetch(`${API_BASE}/reports`);
+    if (rRes.ok) renderReports(await rRes.json());
+  } catch (_) {
+    renderReports(null);
+  }
+}
+
+// ── Demo/fallback data ────────────────────────────────────────────────────
+function renderDemoData() {
+  const demo = {
+    score: 8,
+    label: 'MARGINAL',
+    reasons: [
+      { source: 'SPC', weight: 'primary',  text: 'No active SPC Day 1 tornado outlook (background rate ≤2%)' },
+      { source: 'HRRR', weight: 'modifier', text: 'CAPE (instability): ~300 J/kg (score 0%)' },
+      { source: 'HRRR', weight: 'modifier', text: '0–6 km bulk shear: ~18 kt (score 0%)' },
+      { source: 'NWS',  weight: 'context',  text: 'No active tornado warnings or watches' },
+    ],
+    inputs: {
+      spcDay1Prob: 0, spcDay2Prob: 0,
+      spcDay1Significant: false,
+      ingredientScore: 0.15,
+      hasTornadoWarning: false,
+      hasTornadoWatch: false,
+    },
+    calculatedAt: new Date().toISOString(),
+  };
+  renderRisk(demo);
+
+  renderSPC({
+    day1: { probability: 0, significant: false, inOutlook: false },
+    day2: { probability: 0, significant: false, inOutlook: false },
+    fetchedAt: new Date().toISOString(),
+  });
+
+  renderHRRR({
+    source: 'demo',
+    ingredientScore: 0.15,
+    ingredients: { cape: 300, shear06km: 18, srh01km: 80, lclHeight: 1400, cin: 30 },
+    scoring: {
+      combined: 0.15,
+      breakdown: {
+        cape:      { value: 300,  score: 0.0 },
+        shear06km: { value: 18,   score: 0.0 },
+        srh01km:   { value: 80,   score: 0.0 },
+        lclHeight: { value: 1400, score: 0.4 },
+        cin:       { value: 30,   penalty: 0 },
+      },
+    },
+    fetchedAt: new Date().toISOString(),
+  });
+
+  renderAlerts({ hasTornadoWarning: false, hasTornadoWatch: false, allRelevantAlerts: [] });
+  renderReports(null);
+}
+
+// ── Render risk card ──────────────────────────────────────────────────────
+function renderRisk(risk) {
+  const { score, label, reasons, calculatedAt } = risk;
+
+  // Score number
+  document.getElementById('scoreValue').textContent = score;
+
+  // Ring animation
+  const circ = 2 * Math.PI * 60; // 376.99
+  const offset = circ - (circ * score / 100);
+  const ring = document.getElementById('ringFill');
+  ring.style.strokeDashoffset = offset;
+
+  // Label
+  document.getElementById('riskLabel').textContent = label;
+
+  // Colors
+  const color = RISK_COLORS[label] || RISK_COLORS.MINIMAL;
+  document.documentElement.style.setProperty('--current-risk', color);
+  ring.style.stroke = color;
+
+  // Updated time
+  const dt = new Date(calculatedAt);
+  document.getElementById('riskUpdated').textContent =
+    'Updated ' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  // Warning banner
+  const banner = document.getElementById('warningBanner');
+  if (risk.inputs?.hasTornadoWarning) {
+    banner.classList.add('active');
+    const tw = (reasons || []).find(r => r.source === 'NWS' && r.weight === 'critical');
+    if (tw) document.getElementById('warningDesc').textContent = tw.text;
+  } else {
+    banner.classList.remove('active');
+  }
+
+  // Reasons
+  const container = document.getElementById('riskReasons');
+  if (!reasons || reasons.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted)">No data</div>';
+    return;
+  }
+  container.innerHTML = reasons.slice(0, 5).map(r => `
+    <div class="reason-item">
+      <span class="reason-badge badge-${r.weight === 'critical' ? 'critical' : r.source}">${r.source}</span>
+      <span>${r.text}</span>
+    </div>
+  `).join('');
+}
+
+// ── Render SPC ────────────────────────────────────────────────────────────
+function renderSPC(spc) {
+  const { day1, day2 } = spc;
+
+  document.getElementById('spcDay1').innerHTML =
+    `${day1.probability}<span class="spc-prob-unit">%</span>`;
+  document.getElementById('spcDay2').innerHTML =
+    `${day2.probability}<span class="spc-prob-unit">%</span>`;
+
+  document.getElementById('spcDay1Status').textContent =
+    day1.inOutlook ? 'Within Day 1 outlook area' : 'Outside Day 1 outlook';
+  document.getElementById('spcDay2Status').textContent =
+    day2.inOutlook ? 'Within Day 2 outlook area' : 'Outside Day 2 outlook';
+
+  document.getElementById('spcDay1Sig').classList.toggle('active', !!day1.significant);
+  document.getElementById('spcDay2Sig').classList.toggle('active', !!day2.significant);
+}
+
+// ── Render HRRR ingredients ───────────────────────────────────────────────
+function renderHRRR(hrrr) {
+  const ing = hrrr.ingredients || {};
+  const bd  = hrrr.scoring?.breakdown || {};
+
+  const rows = [
+    { key: 'cape',      label: 'CAPE',        unit: 'J/kg',    score: bd.cape?.score      || 0, val: ing.cape },
+    { key: 'shear06km', label: '0–6km Shear', unit: 'kt',      score: bd.shear06km?.score || 0, val: ing.shear06km },
+    { key: 'srh01km',   label: '0–1km SRH',   unit: 'm²/s²',   score: bd.srh01km?.score   || 0, val: ing.srh01km },
+    { key: 'lclHeight', label: 'LCL Height',  unit: 'm',       score: bd.lclHeight?.score || 0, val: ing.lclHeight },
+    { key: 'cin',       label: 'CIN',         unit: 'J/kg',    score: 1 - Math.min(1, (ing.cin || 0) / 200), val: ing.cin },
+  ];
+
+  const html = rows.map(r => `
+    <div class="ingredient-row">
+      <div class="ing-label">${r.label}</div>
+      <div class="ing-bar-track">
+        <div class="ing-bar-fill" style="width:${Math.round(r.score * 100)}%"></div>
+      </div>
+      <div class="ing-value">${r.val != null ? r.val : '—'} <span style="font-size:9px;color:var(--muted)">${r.unit}</span></div>
+    </div>
+  `).join('');
+
+  document.getElementById('ingredientGrid').innerHTML = html;
+
+  const sourceMap = { nws_proxy: 'Source: NWS gridded forecast proxy', hrrr: 'Source: HRRR model', default: 'Source: Default estimates' };
+  document.getElementById('ingredientSource').textContent =
+    sourceMap[hrrr.source] || `Source: ${hrrr.source}`;
+}
+
+// ── Render alerts ─────────────────────────────────────────────────────────
+function renderAlerts(nws) {
+  const container = document.getElementById('alertsList');
+  const alerts = nws.allRelevantAlerts || [];
+
+  if (alerts.length === 0) {
+    container.innerHTML = '<div class="no-alerts">✓ No active alerts for Jonesboro area</div>';
+    return;
+  }
+
+  container.innerHTML = alerts.slice(0, 6).map(a => {
+    const cls = (a.event || '').includes('Warning') ? 'warning'
+              : (a.event || '').includes('Watch') ? 'watch' : 'advisory';
+    const exp = a.expires ? new Date(a.expires).toLocaleString([], {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    }) : '—';
+    return `
+      <div class="alert-item ${cls}">
+        <div class="alert-event">${a.event || 'Alert'}</div>
+        <div class="alert-headline">${a.headline || ''}</div>
+        <div class="alert-expires">Expires: ${exp}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Render storm reports ──────────────────────────────────────────────────
+function renderReports(reports) {
+  const container = document.getElementById('reportsList');
+  if (!reports) {
+    container.innerHTML = '<div class="no-reports">Storm reports unavailable</div>';
+    return;
+  }
+
+  const items = reports.nearbyReportsToday || [];
+  if (items.length === 0) {
+    container.innerHTML = '<div class="no-reports">No storm reports near Jonesboro today</div>';
+    return;
+  }
+
+  container.innerHTML = items.slice(0, 12).map(r => `
+    <div class="report-item">
+      <span class="report-type">${r.Type || 'RPT'}</span>
+      <span class="report-desc">${r.Comments || r.Location || '—'}</span>
+      <span class="report-loc">${r.State || ''}</span>
+    </div>
+  `).join('');
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────
+function setStatus(state) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (state === 'live') {
+    dot.className = 'status-dot'; txt.textContent = 'Live';
+  } else if (state === 'loading') {
+    dot.className = 'status-dot loading'; txt.textContent = 'Updating…';
+  } else {
+    dot.className = 'status-dot error'; txt.textContent = 'Error — using demo data';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('active');
+}
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    await fetchAll();
+    scheduleRefresh();
+  }, REFRESH_INTERVALS.risk);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+fetchAll().then(scheduleRefresh);
+</script>
+</body>
+</html>
